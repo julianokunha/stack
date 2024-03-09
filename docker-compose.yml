@@ -1,6 +1,6 @@
 ---
 include:
-  - .local/docker-compose.yml
+  - ./.local/docker-compose.yml
 services:
   gateway:
     image: "caddy:2.7.5-alpine"
