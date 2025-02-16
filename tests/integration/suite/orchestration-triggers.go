@@ -1,23 +1,23 @@
 package suite
 
 import (
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/operations"
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/shared"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"time"
+
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/operations"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/shared"
+	"github.com/formancehq/go-libs/api"
+	"github.com/formancehq/go-libs/publish"
 	orchestrationevents "github.com/formancehq/orchestration/pkg/events"
 	paymentsevents "github.com/formancehq/payments/pkg/events"
-	"github.com/formancehq/stack/libs/events"
-	"github.com/formancehq/stack/libs/go-libs/api"
-	"github.com/formancehq/stack/libs/go-libs/publish"
 	. "github.com/formancehq/stack/tests/integration/internal"
 	"github.com/formancehq/stack/tests/integration/internal/modules"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"math/big"
-	"net/http"
-	"net/http/httptest"
-	"time"
 )
 
 var _ = WithModules([]*Module{modules.Auth, modules.Orchestration, modules.Ledger}, func() {
@@ -30,6 +30,12 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration, modules.Ledge
 			srv.Close()
 		})
 		BeforeEach(func() {
+			createLedgerResponse, err := Client().Ledger.V2.CreateLedger(TestContext(), operations.V2CreateLedgerRequest{
+				Ledger: "default",
+			})
+			Expect(err).To(BeNil())
+			Expect(createLedgerResponse.StatusCode).To(Equal(http.StatusNoContent))
+
 			srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Header.Get("Authorization") == "" {
 					w.WriteHeader(http.StatusForbidden)
@@ -37,7 +43,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration, modules.Ledge
 				}
 				_, _ = w.Write([]byte(`{"data": {"name": "foo"}}`))
 			}))
-			response, err := Client().Orchestration.CreateWorkflow(
+			response, err := Client().Orchestration.V1.CreateWorkflow(
 				TestContext(),
 				&shared.CreateWorkflowRequest{
 					Name: ptr(uuid.NewString()),
@@ -66,7 +72,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration, modules.Ledge
 			Expect(err).ToNot(HaveOccurred())
 			Expect(response.StatusCode).To(Equal(201))
 
-			createTriggerResponse, err = Client().Orchestration.CreateTrigger(
+			createTriggerResponse, err = Client().Orchestration.V1.CreateTrigger(
 				TestContext(),
 				&shared.TriggerData{
 					Event:      paymentsevents.EventTypeSavedPayments,
@@ -84,7 +90,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration, modules.Ledge
 			Expect(createTriggerResponse.StatusCode).To(Equal(201))
 			Expect(createTriggerResponse.CreateTriggerResponse.Data.ID).NotTo(BeEmpty())
 
-			listTriggersResponse, err := Client().Orchestration.V2ListTriggers(TestContext())
+			listTriggersResponse, err := Client().Orchestration.V2.ListTriggers(TestContext(), operations.V2ListTriggersRequest{})
 			Expect(err).To(BeNil())
 			Expect(listTriggersResponse.V2ListTriggersResponse.Cursor.Data).Should(HaveLen(1))
 		})
@@ -123,7 +129,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration, modules.Ledge
 					err                             error
 				)
 				Eventually(func(g Gomega) bool {
-					listTriggersOccurrencesResponse, err = Client().Orchestration.V2ListTriggersOccurrences(TestContext(), operations.V2ListTriggersOccurrencesRequest{
+					listTriggersOccurrencesResponse, err = Client().Orchestration.V2.ListTriggersOccurrences(TestContext(), operations.V2ListTriggersOccurrencesRequest{
 						TriggerID: createTriggerResponse.CreateTriggerResponse.Data.ID,
 					})
 					g.Expect(err).To(BeNil())
@@ -137,7 +143,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration, modules.Ledge
 
 				var getInstanceResponse *operations.V2GetInstanceResponse
 				Eventually(func() bool {
-					getInstanceResponse, err = Client().Orchestration.V2GetInstance(TestContext(), operations.V2GetInstanceRequest{
+					getInstanceResponse, err = Client().Orchestration.V2.GetInstance(TestContext(), operations.V2GetInstanceRequest{
 						InstanceID: *listTriggersOccurrencesResponse.V2ListTriggersOccurrencesResponse.Cursor.Data[0].WorkflowInstanceID,
 					})
 					Expect(err).To(BeNil())
@@ -147,7 +153,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration, modules.Ledge
 
 				Expect(getInstanceResponse.V2GetWorkflowInstanceResponse.Data.Error).To(BeNil())
 
-				listTransactionsResponse, err := Client().Ledger.V2ListTransactions(TestContext(), operations.V2ListTransactionsRequest{
+				listTransactionsResponse, err := Client().Ledger.V2.ListTransactions(TestContext(), operations.V2ListTransactionsRequest{
 					Ledger: "default",
 				})
 				Expect(err).To(BeNil())
@@ -163,20 +169,19 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration, modules.Ledge
 					To(Equal(big.NewInt(1000000)))
 
 				By("And trigger a new succeeded workflow event", func() {
-					msg := WaitOnChanWithTimeout(msgs, time.Second)
-					Expect(events.Check(msg.Data, "orchestration", orchestrationevents.SucceededTrigger)).Should(Succeed())
+					Eventually(msgs).Should(ReceiveEvent("orchestration", orchestrationevents.SucceededTrigger))
 				})
 			})
 		})
 		Then("deleting the trigger", func() {
 			BeforeEach(func() {
-				_, err := Client().Orchestration.V2DeleteTrigger(TestContext(), operations.V2DeleteTriggerRequest{
+				_, err := Client().Orchestration.V2.DeleteTrigger(TestContext(), operations.V2DeleteTriggerRequest{
 					TriggerID: createTriggerResponse.CreateTriggerResponse.Data.ID,
 				})
 				Expect(err).To(BeNil())
 			})
 			It("should not appear on list", func() {
-				listTriggersResponse, err := Client().Orchestration.V2ListTriggers(TestContext())
+				listTriggersResponse, err := Client().Orchestration.V2.ListTriggers(TestContext(), operations.V2ListTriggersRequest{})
 				Expect(err).To(BeNil())
 				Expect(listTriggersResponse.V2ListTriggersResponse.Cursor.Data).Should(HaveLen(0))
 			})
@@ -190,7 +195,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 			createTriggerResponse *operations.CreateTriggerResponse
 		)
 		BeforeEach(func() {
-			response, err := Client().Orchestration.CreateWorkflow(
+			response, err := Client().Orchestration.V1.CreateWorkflow(
 				TestContext(),
 				&shared.CreateWorkflowRequest{
 					Name:   ptr(uuid.NewString()),
@@ -200,7 +205,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(response.StatusCode).To(Equal(201))
 
-			createTriggerResponse, err = Client().Orchestration.CreateTrigger(
+			createTriggerResponse, err = Client().Orchestration.V1.CreateTrigger(
 				TestContext(),
 				&shared.TriggerData{
 					Event:      paymentsevents.EventTypeSavedPayments,
@@ -239,7 +244,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 					err                             error
 				)
 				Eventually(func(g Gomega) bool {
-					listTriggersOccurrencesResponse, err = Client().Orchestration.V2ListTriggersOccurrences(TestContext(), operations.V2ListTriggersOccurrencesRequest{
+					listTriggersOccurrencesResponse, err = Client().Orchestration.V2.ListTriggersOccurrences(TestContext(), operations.V2ListTriggersOccurrencesRequest{
 						TriggerID: createTriggerResponse.CreateTriggerResponse.Data.ID,
 					})
 					g.Expect(err).To(BeNil())
@@ -251,8 +256,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 				}).Should(BeTrue())
 
 				By("should also trigger a new failed workflow event", func() {
-					msg := WaitOnChanWithTimeout(msgs, time.Second)
-					Expect(events.Check(msg.Data, "orchestration", orchestrationevents.FailedTrigger)).Should(Succeed())
+					Eventually(msgs).Should(ReceiveEvent("orchestration", orchestrationevents.FailedTrigger))
 				})
 			})
 		})

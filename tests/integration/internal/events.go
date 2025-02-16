@@ -3,9 +3,11 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/formancehq/stack/libs/go-libs/publish"
+	"github.com/formancehq/stack/libs/events"
+	"github.com/formancehq/go-libs/publish"
 	"github.com/nats-io/nats.go"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/types"
 )
 
 func NatsClient() *nats.Conn {
@@ -67,4 +69,54 @@ func PublishLedger(message publish.EventMessage) {
 
 	err = NatsClient().Publish(Topic("ledger"), data)
 	Expect(err).To(BeNil())
+}
+
+type receiveEventMatcher struct {
+	eventName   string
+	serviceName string
+	err         error
+}
+
+func (r *receiveEventMatcher) Match(actual interface{}) (success bool, err error) {
+
+	var data []byte
+	// Handle different types of channels and extract data accordingly.
+	switch v := actual.(type) {
+	case chan *nats.Msg:
+		select {
+		case msg := <-v:
+			data = msg.Data
+		default:
+			return false, nil
+		}
+	case chan []byte:
+		select {
+		case msg := <-v:
+			data = msg
+		default:
+			return false, nil
+		}
+	default:
+		return false, fmt.Errorf("expected chan *nats.Msg or chan []uint8, got %T", actual)
+	}
+
+	r.err = events.Check(data, r.serviceName, r.eventName)
+	return r.err == nil, nil
+}
+
+func (r *receiveEventMatcher) FailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("Expected event to match schema: \r\n%s", r.err)
+}
+
+func (r *receiveEventMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	return fmt.Sprintf("Expected event not to match schema: \n%s", r.err)
+}
+
+var _ types.GomegaMatcher = (*receiveEventMatcher)(nil)
+
+func ReceiveEvent(serviceName, eventName string) *receiveEventMatcher {
+	return &receiveEventMatcher{
+		eventName:   eventName,
+		serviceName: serviceName,
+	}
 }

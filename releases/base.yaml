@@ -25,9 +25,31 @@ info:
 servers:
 - url: http://localhost
   description: local server
+- url: https://{organization}.{environment}.formance.cloud
+  description: A per-organization and per-environment API
+  variables:
+    organization:
+      description: The organization name. Defaults to a generic organization.
+      default: orgID-stackID
+    environment:
+      description: The environment name. Defaults to the production environment.
+      default: sandbox
+      enum:
+        - sandbox
+        - eu-west-1
+        - us-east-1
 
-security:
-  - Authorization: []
+tags:
+  - name: ledger.v1
+  - name: ledger.v2
+  - name: payments.v1
+  - name: auth.v1
+  - name: orchestration.v1
+  - name: orchestration.v2
+  - name: reconciliation.v1
+  - name: search.v1
+  - name: webhooks.v1
+  - name: wallets.v1
 
 components:
   securitySchemes:
@@ -35,92 +57,41 @@ components:
       type: oauth2
       flows:
         clientCredentials:
-          tokenUrl: 'https://localhost/api/auth/oauth/token'
-          refreshUrl: 'https://localhost/api/auth/oauth/token'
+          tokenUrl: '/api/auth/oauth/token'
+          refreshUrl: '/api/auth/oauth/token'
           scopes: {}
-
-  schemas:
-    Version:
-      type: object
-      properties:
-        name:
-          type: string
-        version:
-          type: string
-        health:
-          type: boolean
-      required:
-      - name
-      - version
-      - health
-    GetVersionsResponse:
-      type: object
-      properties:
-        region:
-          type: string
-        env:
-          type: string
-        versions:
-          type: array
-          items:
-            $ref: '#/components/schemas/Version'
-      required:
-      - region
-      - env
-      - versions
+    NoAuthorization:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: '/api/auth/oauth/token'
+          refreshUrl: '/api/auth/oauth/token'
+          scopes: {}
 
 x-tagGroups:
   - name: Auth
     tags:
-      - Clients
-      - Scopes
-      - Users
-      - Auth
+      - auth.v1
   - name: Ledger
     tags:
-      - Ledger
-      - Server
-      - Accounts
-      - Mapping
-      - Script
-      - Stats
-      - Transactions
-      - Balances
-      - server
-      - accounts
-      - mapping
-      - script
-      - stats
-      - transactions
-      - balances
+      - ledger.v1
+      - ledger.v2
   - name: Payments
     tags:
-      - Payments
+      - payments.v1
   - name: Search
     tags:
-      - Search
+      - search.v1
   - name: Wallets
     tags:
-      - Wallets
+      - wallets.v1
   - name: Webhooks
     tags:
-      - Webhooks
+      - webhooks.v1
   - name: Flows
     tags:
-      - Orchestration
+      - orchestration.v1
+      - orchestration.v2
   - name: Reconciliation
     tags:
-      - Reconciliation
-
-paths:
-  /versions:
-    get:
-      summary: Show stack version information
-      operationId: getVersions
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetVersionsResponse'
+      - reconciliation.v1

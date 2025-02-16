@@ -9,13 +9,12 @@ import (
 
 	"github.com/formancehq/stack/tests/integration/internal/modules"
 
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/operations"
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/shared"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/operations"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/shared"
 	. "github.com/formancehq/stack/tests/integration/internal"
 	webhooks "github.com/formancehq/webhooks/pkg"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/spf13/viper"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
@@ -23,7 +22,7 @@ import (
 
 var _ = WithModules([]*Module{modules.Ledger, modules.Webhooks}, func() {
 	BeforeEach(func() {
-		createLedgerResponse, err := Client().Ledger.V2CreateLedger(TestContext(), operations.V2CreateLedgerRequest{
+		createLedgerResponse, err := Client().Ledger.V2.CreateLedger(TestContext(), operations.V2CreateLedgerRequest{
 			Ledger: "default",
 		})
 		Expect(err).To(BeNil())
@@ -38,16 +37,15 @@ var _ = WithModules([]*Module{modules.Ledger, modules.Webhooks}, func() {
 			defer func() {
 				httpServer.Close()
 			}()
-			//TODO: Remove viper usage
 			sqldb := sql.OpenDB(
 				pgdriver.NewConnector(
-					pgdriver.WithDSN(viper.GetString("postgres-uri"))))
+					pgdriver.WithDSN(CurrentTest().GetDatabaseSourceName("webhooks"))))
 			db := bun.NewDB(sqldb, pgdialect.New())
 			defer func() {
 				_ = db.Close()
 			}()
 
-			response, err := Client().Webhooks.InsertConfig(
+			response, err := Client().Webhooks.V1.InsertConfig(
 				TestContext(),
 				shared.ConfigUser{
 					Endpoint: httpServer.URL,
@@ -59,7 +57,7 @@ var _ = WithModules([]*Module{modules.Ledger, modules.Webhooks}, func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(response.StatusCode).To(Equal(http.StatusOK))
 
-			createTransactionResponse, err := Client().Ledger.V2CreateTransaction(
+			createTransactionResponse, err := Client().Ledger.V2.CreateTransaction(
 				TestContext(),
 				operations.V2CreateTransactionRequest{
 					V2PostTransaction: shared.V2PostTransaction{

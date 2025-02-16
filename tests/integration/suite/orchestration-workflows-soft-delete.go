@@ -1,9 +1,9 @@
 package suite
 
 import (
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/operations"
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/sdkerrors"
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/shared"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/operations"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/sdkerrors"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/shared"
 	. "github.com/formancehq/stack/tests/integration/internal"
 	"github.com/formancehq/stack/tests/integration/internal/modules"
 	. "github.com/onsi/ginkgo/v2"
@@ -17,7 +17,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 			workflow *shared.V2Workflow
 		)
 		BeforeEach(func() {
-			response, err := Client().Orchestration.V2CreateWorkflow(
+			response, err := Client().Orchestration.V2.CreateWorkflow(
 				TestContext(),
 				&shared.V2CreateWorkflowRequest{
 					Name: ptr(uuid.New()),
@@ -55,7 +55,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 			Expect(workflow.ID).NotTo(BeEmpty())
 		})
 		It("should delete the workflow", func() {
-			response, err := Client().Orchestration.V2DeleteWorkflow(
+			response, err := Client().Orchestration.V2.DeleteWorkflow(
 				TestContext(),
 				operations.V2DeleteWorkflowRequest{
 					FlowID: workflow.ID,
@@ -69,26 +69,26 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 
 	When("deleting a non-uuid workflow", func() {
 		It("should return 400 with unknown", func() {
-			_, err := Client().Orchestration.V2DeleteWorkflow(
+			_, err := Client().Orchestration.V2.DeleteWorkflow(
 				TestContext(),
 				operations.V2DeleteWorkflowRequest{
 					FlowID: "unknown",
 				},
 			)
 			Expect(err).To(HaveOccurred())
-			Expect(err.(*sdkerrors.V2Error).ErrorCode).To(Equal(sdkerrors.ErrorCodeValidation))
+			Expect(err.(*sdkerrors.V2Error).ErrorCode).To(Equal(sdkerrors.SchemasErrorCodeValidation))
 		})
 	})
 	When("deleting a non-existing workflow", func() {
 		It("should return 404", func() {
-			_, err := Client().Orchestration.V2DeleteWorkflow(
+			_, err := Client().Orchestration.V2.DeleteWorkflow(
 				TestContext(),
 				operations.V2DeleteWorkflowRequest{
 					FlowID: uuid.New(),
 				},
 			)
 			Expect(err).To(HaveOccurred())
-			Expect(err.(*sdkerrors.V2Error).ErrorCode).To(Equal(sdkerrors.ErrorCodeNotFound))
+			Expect(err.(*sdkerrors.V2Error).ErrorCode).To(Equal(sdkerrors.SchemasErrorCodeNotFound))
 		})
 	})
 })

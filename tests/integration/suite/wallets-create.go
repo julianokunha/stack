@@ -2,8 +2,11 @@ package suite
 
 import (
 	"fmt"
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/operations"
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/shared"
+	"github.com/formancehq/go-libs/pointer"
+	"math/big"
+
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/operations"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/shared"
 	. "github.com/formancehq/stack/tests/integration/internal"
 	"github.com/formancehq/stack/tests/integration/internal/modules"
 	"github.com/google/uuid"
@@ -16,17 +19,31 @@ var _ = WithModules([]*Module{modules.Auth, modules.Ledger, modules.Wallets}, fu
 	When(fmt.Sprintf("creating %d wallets", countWallets), func() {
 		JustBeforeEach(func() {
 			for i := 0; i < countWallets; i++ {
-				response, err := Client().Wallets.CreateWallet(
+				name := uuid.NewString()
+				response, err := Client().Wallets.V1.CreateWallet(
 					TestContext(),
-					&shared.CreateWalletRequest{
-						Metadata: map[string]string{
-							"wallets_number": fmt.Sprint(i),
+					operations.CreateWalletRequest{
+						CreateWalletRequest: &shared.CreateWalletRequest{
+							Metadata: map[string]string{
+								"wallets_number": fmt.Sprint(i),
+							},
+							Name: name,
 						},
-						Name: uuid.NewString(),
 					},
 				)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response.StatusCode).To(Equal(201))
+
+				_, err = Client().Wallets.V1.CreditWallet(TestContext(), operations.CreditWalletRequest{
+					CreditWalletRequest: &shared.CreditWalletRequest{
+						Amount: shared.Monetary{
+							Amount: big.NewInt(100),
+							Asset:  "USD",
+						},
+					},
+					ID: response.CreateWalletResponse.Data.ID,
+				})
+				Expect(err).ToNot(HaveOccurred())
 			}
 		})
 		Then("listing them", func() {
@@ -35,9 +52,13 @@ var _ = WithModules([]*Module{modules.Auth, modules.Ledger, modules.Wallets}, fu
 				response *operations.ListWalletsResponse
 				err      error
 			)
+			BeforeEach(func() {
+				// reset between each test
+				request = operations.ListWalletsRequest{}
+			})
 			JustBeforeEach(func() {
 				Eventually(func(g Gomega) bool {
-					response, err = Client().Wallets.ListWallets(TestContext(), request)
+					response, err = Client().Wallets.V1.ListWallets(TestContext(), request)
 					g.Expect(err).ToNot(HaveOccurred())
 					g.Expect(response.StatusCode).To(Equal(200))
 					return true
@@ -54,6 +75,17 @@ var _ = WithModules([]*Module{modules.Auth, modules.Ledger, modules.Wallets}, fu
 				})
 				It("should return only one item", func() {
 					Expect(response.ListWalletsResponse.Cursor.Data).To(HaveLen(1))
+				})
+			})
+			Context("expanding balances", func() {
+				BeforeEach(func() {
+					request.Expand = pointer.For("balances")
+				})
+				It("should return all items with volumes and balances", func() {
+					Expect(response.ListWalletsResponse.Cursor.Data).To(HaveLen(3))
+					for _, wallet := range response.ListWalletsResponse.Cursor.Data {
+						Expect(wallet.Balances.Main.Assets["USD"]).To(Equal(big.NewInt(100)))
+					}
 				})
 			})
 		})

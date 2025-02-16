@@ -13,9 +13,18 @@
       }
     },
     {
+      "inputFile": "./../ee/gateway/openapi.yaml",
+      "dispute": {
+        "prefix": "gateway"
+      }
+    },
+    {
       "inputFile": "./../components/ledger/openapi.yaml",
       "pathModification":{
         "prepend": "/api/ledger"
+      },
+      "dispute": {
+        "prefix": "ledger"
       }
     },
     {

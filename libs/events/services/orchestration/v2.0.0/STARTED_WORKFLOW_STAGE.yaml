@@ -1,0 +1,15 @@
+type: object
+properties:
+  id:
+    type: string
+    minLength: 1
+  instanceID:
+    type: string
+    minLength: 1
+  number:
+    type: integer
+    minLength: 1
+required:
+  - id
+  - instanceID
+  - number

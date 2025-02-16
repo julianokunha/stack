@@ -6,8 +6,8 @@ import (
 
 	"github.com/formancehq/stack/tests/integration/internal/modules"
 
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/operations"
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/shared"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/operations"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/shared"
 	paymentEvents "github.com/formancehq/payments/pkg/events"
 	"github.com/formancehq/stack/libs/events"
 	. "github.com/formancehq/stack/tests/integration/internal"
@@ -30,7 +30,7 @@ var _ = WithModules([]*Module{modules.Payments, modules.Search}, func() {
 
 			cancelSubscription, msgs = SubscribePayments()
 
-			response, err := Client().Payments.InstallConnector(
+			response, err := Client().Payments.V1.InstallConnector(
 				TestContext(),
 				operations.InstallConnectorRequest{
 					ConnectorConfig: shared.ConnectorConfig{
@@ -56,7 +56,7 @@ var _ = WithModules([]*Module{modules.Payments, modules.Search}, func() {
 		})
 		It("should generate some payments", func() {
 			Eventually(func(g Gomega) []shared.Payment {
-				response, err := Client().Payments.ListPayments(
+				response, err := Client().Payments.V1.ListPayments(
 					TestContext(),
 					operations.ListPaymentsRequest{},
 				)
@@ -67,7 +67,7 @@ var _ = WithModules([]*Module{modules.Payments, modules.Search}, func() {
 		})
 		It("should be ingested on search", func() {
 			Eventually(func(g Gomega) bool {
-				response, err := Client().Search.Search(
+				response, err := Client().Search.V1.Search(
 					TestContext(),
 					shared.Query{
 						Target: ptr("PAYMENT"),

@@ -1,8 +1,8 @@
 package suite
 
 import (
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/operations"
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/shared"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/operations"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/shared"
 	. "github.com/formancehq/stack/tests/integration/internal"
 	"github.com/formancehq/stack/tests/integration/internal/modules"
 	. "github.com/onsi/ginkgo/v2"
@@ -17,8 +17,9 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 	)
 	When("first listing workflows", func() {
 		BeforeEach(func() {
-			response, err := Client().Orchestration.V2ListWorkflows(
+			response, err := Client().Orchestration.V2.ListWorkflows(
 				TestContext(),
+				operations.V2ListWorkflowsRequest{},
 			)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(response.StatusCode).To(Equal(200))
@@ -31,7 +32,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 	})
 	When("populating 1 workflow", func() {
 		BeforeEach(func() {
-			response, err := Client().Orchestration.V2CreateWorkflow(
+			response, err := Client().Orchestration.V2.CreateWorkflow(
 				TestContext(),
 				&shared.V2CreateWorkflowRequest{
 					Name: ptr(uuid.New()),
@@ -69,8 +70,9 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 			Expect(workflow.ID).NotTo(BeEmpty())
 		})
 		JustBeforeEach(func() {
-			response, err := Client().Orchestration.V2ListWorkflows(
+			response, err := Client().Orchestration.V2.ListWorkflows(
 				TestContext(),
+				operations.V2ListWorkflowsRequest{},
 			)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(response.StatusCode).To(Equal(200))
@@ -83,7 +85,7 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 		})
 		When("Deleting a workflow", func() {
 			JustBeforeEach(func() {
-				response, err := Client().Orchestration.V2DeleteWorkflow(
+				response, err := Client().Orchestration.V2.DeleteWorkflow(
 					TestContext(),
 					operations.V2DeleteWorkflowRequest{
 						FlowID: workflow.ID,
@@ -94,8 +96,9 @@ var _ = WithModules([]*Module{modules.Auth, modules.Orchestration}, func() {
 
 			})
 			JustBeforeEach(func() {
-				response, err := Client().Orchestration.V2ListWorkflows(
+				response, err := Client().Orchestration.V2.ListWorkflows(
 					TestContext(),
+					operations.V2ListWorkflowsRequest{},
 				)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(response.StatusCode).To(Equal(200))

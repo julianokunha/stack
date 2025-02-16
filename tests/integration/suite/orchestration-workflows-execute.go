@@ -7,11 +7,12 @@ import (
 	"github.com/formancehq/stack/tests/integration/internal/modules"
 	"github.com/nats-io/nats.go"
 	"math/big"
+	"net/http"
 	"time"
 
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/operations"
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/shared"
-	"github.com/formancehq/stack/libs/go-libs/metadata"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/operations"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/shared"
+	"github.com/formancehq/go-libs/metadata"
 	. "github.com/formancehq/stack/tests/integration/internal"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -23,9 +24,16 @@ var _ = WithModules([]*Module{modules.Orchestration, modules.Auth, modules.Ledge
 		var (
 			createWorkflowResponse *shared.V2CreateWorkflowResponse
 			msgs                   chan *nats.Msg
+			now                    = time.Now().Round(time.Microsecond).UTC()
 		)
 		BeforeEach(func() {
-			response, err := Client().Orchestration.V2CreateWorkflow(
+			createLedgerResponse, err := Client().Ledger.V2.CreateLedger(TestContext(), operations.V2CreateLedgerRequest{
+				Ledger: "default",
+			})
+			Expect(err).To(BeNil())
+			Expect(createLedgerResponse.StatusCode).To(Equal(http.StatusNoContent))
+
+			response, err := Client().Orchestration.V2.CreateWorkflow(
 				TestContext(),
 				&shared.V2CreateWorkflowRequest{
 					Name: ptr(uuid.New()),
@@ -51,6 +59,7 @@ var _ = WithModules([]*Module{modules.Orchestration, modules.Auth, modules.Ledge
 								"metadata": map[string]any{
 									"foo": "${userID}",
 								},
+								"timestamp": "${timestamp}",
 							},
 						},
 					},
@@ -73,11 +82,12 @@ var _ = WithModules([]*Module{modules.Orchestration, modules.Auth, modules.Ledge
 		Then("executing it", func() {
 			var runWorkflowResponse *shared.V2RunWorkflowResponse
 			BeforeEach(func() {
-				response, err := Client().Orchestration.V2RunWorkflow(
+				response, err := Client().Orchestration.V2.RunWorkflow(
 					TestContext(),
 					operations.V2RunWorkflowRequest{
 						RequestBody: map[string]string{
-							"userID": "bar",
+							"userID":    "bar",
+							"timestamp": now.Format(time.RFC3339Nano),
 						},
 						WorkflowID: createWorkflowResponse.Data.ID,
 					},
@@ -90,15 +100,24 @@ var _ = WithModules([]*Module{modules.Orchestration, modules.Auth, modules.Ledge
 			It("should be ok", func() {
 				Expect(runWorkflowResponse.Data.ID).NotTo(BeEmpty())
 			})
-			It("Should trigger a succeeded workflow event", func() {
+			It("Should trigger appropriate events", func() {
 				msg := WaitOnChanWithTimeout(msgs, 5*time.Second)
+				Expect(events.Check(msg.Data, "orchestration", orchestrationevents.StartedWorkflow)).Should(Succeed())
+
+				msg = WaitOnChanWithTimeout(msgs, 5*time.Second)
+				Expect(events.Check(msg.Data, "orchestration", orchestrationevents.StartedWorkflowStage)).Should(Succeed())
+
+				msg = WaitOnChanWithTimeout(msgs, 5*time.Second)
+				Expect(events.Check(msg.Data, "orchestration", orchestrationevents.SucceededWorkflowStage)).Should(Succeed())
+
+				msg = WaitOnChanWithTimeout(msgs, 5*time.Second)
 				Expect(events.Check(msg.Data, "orchestration", orchestrationevents.SucceededWorkflow)).Should(Succeed())
 			})
 			Then("waiting for termination", func() {
 				var instanceResponse *shared.V2GetWorkflowInstanceResponse
 				BeforeEach(func() {
 					Eventually(func() bool {
-						response, err := Client().Orchestration.V2GetInstance(
+						response, err := Client().Orchestration.V2.GetInstance(
 							TestContext(),
 							operations.V2GetInstanceRequest{
 								InstanceID: runWorkflowResponse.Data.ID,
@@ -126,7 +145,7 @@ var _ = WithModules([]*Module{modules.Orchestration, modules.Auth, modules.Ledge
 				//Then("checking ledger account balance", func() {
 				//	var balancesCursorResponse *shared.BalancesCursorResponse
 				//	BeforeEach(func() {
-				//		reponse, err := Client().Ledger.V2GetBalances(
+				//		reponse, err := Client().Ledger.V2.GetBalances(
 				//			TestContext(),
 				//			operations.GetBalancesRequest{
 				//				Address: ptr("bank"),
@@ -148,7 +167,7 @@ var _ = WithModules([]*Module{modules.Orchestration, modules.Auth, modules.Ledge
 				Then("reading history", func() {
 					var getWorkflowInstanceHistoryResponse *shared.GetWorkflowInstanceHistoryResponse
 					BeforeEach(func() {
-						response, err := Client().Orchestration.GetInstanceHistory(
+						response, err := Client().Orchestration.V1.GetInstanceHistory(
 							TestContext(),
 							operations.GetInstanceHistoryRequest{
 								InstanceID: runWorkflowResponse.Data.ID,
@@ -194,12 +213,13 @@ var _ = WithModules([]*Module{modules.Orchestration, modules.Auth, modules.Ledge
 								Metadata: map[string]string{
 									"foo": "bar",
 								},
+								Timestamp: &now,
 							}))
 					})
 					Then("reading first stage history", func() {
 						var getWorkflowInstanceHistoryStageResponse *shared.V2GetWorkflowInstanceHistoryStageResponse
 						BeforeEach(func() {
-							response, err := Client().Orchestration.V2GetInstanceStageHistory(
+							response, err := Client().Orchestration.V2.GetInstanceStageHistory(
 								TestContext(),
 								operations.V2GetInstanceStageHistoryRequest{
 									InstanceID: runWorkflowResponse.Data.ID,
@@ -228,6 +248,7 @@ var _ = WithModules([]*Module{modules.Orchestration, modules.Auth, modules.Ledge
 										Metadata: metadata.Metadata{
 											"foo": "bar",
 										},
+										Timestamp: &now,
 									},
 								},
 							}))
@@ -237,9 +258,6 @@ var _ = WithModules([]*Module{modules.Orchestration, modules.Auth, modules.Ledge
 							Expect(getWorkflowInstanceHistoryStageResponse.Data[0].StartedAt).NotTo(BeZero())
 							Expect(getWorkflowInstanceHistoryStageResponse.Data[0].Attempt).To(Equal(int64(1)))
 							Expect(getWorkflowInstanceHistoryStageResponse.Data[0].NextExecution).To(BeNil())
-							Expect(getWorkflowInstanceHistoryStageResponse.Data[0].Output.CreateTransaction.Data[0].Timestamp).
-								NotTo(BeZero())
-							getWorkflowInstanceHistoryStageResponse.Data[0].Output.CreateTransaction.Data[0].Timestamp = time.Time{}
 							Expect(getWorkflowInstanceHistoryStageResponse.Data[0].Output).To(Equal(&shared.V2WorkflowInstanceHistoryStageOutput{
 								CreateTransaction: &shared.V2ActivityCreateTransactionOutput{
 									Data: []shared.OrchestrationV2Transaction{{
@@ -248,6 +266,7 @@ var _ = WithModules([]*Module{modules.Orchestration, modules.Auth, modules.Ledge
 										Metadata: map[string]string{
 											"foo": "bar",
 										},
+										Timestamp: now,
 									}},
 								},
 							}))

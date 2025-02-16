@@ -2,8 +2,8 @@ package internal
 
 import (
 	"context"
-	formance "github.com/formancehq/formance-sdk-go/v2"
-	"github.com/formancehq/stack/libs/go-libs/logging"
+	formance "github.com/formancehq/formance-sdk-go/v3"
+	"github.com/formancehq/go-libs/logging"
 	"github.com/oauth2-proxy/mockoidc"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -15,10 +15,18 @@ import (
 
 var (
 	ctx         context.Context
-	currentEnv  *env
+	currentEnv  *Env
 	currentTest *Test
 	mockOIDC    *mockoidc.MockOIDC
 )
+
+func CurrentEnv() *Env {
+	return currentEnv
+}
+
+func CurrentTest() *Test {
+	return currentTest
+}
 
 func TestContext() context.Context {
 	return ctx
@@ -30,14 +38,13 @@ func Client(options ...formance.SDKOption) *formance.Formance {
 		panic(err)
 	}
 
-	httpTransport, err := newOpenapiCheckerTransport(ctx, currentTest.httpTransport)
 	Expect(err).To(BeNil())
 
 	options = append([]formance.SDKOption{
 		formance.WithServerURL(gatewayUrl.String()),
 		formance.WithClient(
 			&http.Client{
-				Transport: httpTransport,
+				Transport: currentTest.httpTransport,
 			},
 		),
 	}, options...)

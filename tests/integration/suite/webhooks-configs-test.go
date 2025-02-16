@@ -6,11 +6,11 @@ import (
 	"net/http/httptest"
 	"strconv"
 
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/sdkerrors"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/sdkerrors"
 	"github.com/formancehq/stack/tests/integration/internal/modules"
 
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/operations"
-	"github.com/formancehq/formance-sdk-go/v2/pkg/models/shared"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/operations"
+	"github.com/formancehq/formance-sdk-go/v3/pkg/models/shared"
 	. "github.com/formancehq/stack/tests/integration/internal"
 	webhooks "github.com/formancehq/webhooks/pkg"
 	"github.com/formancehq/webhooks/pkg/security"
@@ -63,7 +63,7 @@ var _ = WithModules([]*Module{modules.Webhooks}, func() {
 						"ledger.committed_transactions",
 					},
 				}
-				response, err := Client().Webhooks.InsertConfig(
+				response, err := Client().Webhooks.V1.InsertConfig(
 					TestContext(),
 					cfg,
 				)
@@ -77,7 +77,7 @@ var _ = WithModules([]*Module{modules.Webhooks}, func() {
 
 			Context("testing the inserted one", func() {
 				It("should return a successful attempt", func() {
-					response, err := Client().Webhooks.TestConfig(
+					response, err := Client().Webhooks.V1.TestConfig(
 						TestContext(),
 						operations.TestConfigRequest{
 							ID: insertResp.Data.ID,
@@ -111,7 +111,7 @@ var _ = WithModules([]*Module{modules.Webhooks}, func() {
 						"ledger.committed_transactions",
 					},
 				}
-				response, err := Client().Webhooks.InsertConfig(
+				response, err := Client().Webhooks.V1.InsertConfig(
 					TestContext(),
 					cfg,
 				)
@@ -125,7 +125,7 @@ var _ = WithModules([]*Module{modules.Webhooks}, func() {
 
 			Context("testing the inserted one", func() {
 				It("should return a failed attempt", func() {
-					response, err := Client().Webhooks.TestConfig(
+					response, err := Client().Webhooks.V1.TestConfig(
 						TestContext(),
 						operations.TestConfigRequest{
 							ID: insertResp.Data.ID,
@@ -145,7 +145,7 @@ var _ = WithModules([]*Module{modules.Webhooks}, func() {
 
 		Context("testing an unknown ID", func() {
 			It("should fail", func() {
-				_, err := Client().Webhooks.TestConfig(
+				_, err := Client().Webhooks.V1.TestConfig(
 					TestContext(),
 					operations.TestConfigRequest{
 						ID: "unknown",
